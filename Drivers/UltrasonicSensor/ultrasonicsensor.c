@@ -1,90 +1,84 @@
-
-// /**
-//  * Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
-//  *
-//  * SPDX-License-Identifier: BSD-3-Clause
-//  */
-
-// #include <stdio.h>
-// #include "pico/stdlib.h"
-
-// int main() {
-//     stdio_init_all();
-//     while (true) {
-//         printf("Hello, world!\n");
-//         sleep_ms(1000);
-//     }
-// }
-
-//Get readings from ultrasonic sensor
-
 #include "pico/stdlib.h"
-#include <stdio.h>
 #include "hardware/gpio.h"
 #include "hardware/timer.h"
+#include "hardware/irq.h"
+#include <stdio.h>
 
-int timeout = 26100;
+#define TRIG_PIN 6
+#define ECHO_PIN 7
 
-void setupUltrasonicPins(uint trigPin, uint echoPin)
-{
-    gpio_init(trigPin);
-    gpio_init(echoPin);
-    gpio_set_dir(trigPin, GPIO_OUT);
-    gpio_set_dir(echoPin, GPIO_IN);
-}
+volatile uint32_t start_time = 0;
+volatile uint32_t end_time = 0;
+volatile bool new_measurement_available = false;
 
-uint64_t getPulse(uint trigPin, uint echoPin)
-{
-    gpio_put(trigPin, 1);
-    sleep_us(10);
-    gpio_put(trigPin, 0);
-
-    uint64_t width = 0;
-
-    while (gpio_get(echoPin) == 0) tight_loop_contents();
-    absolute_time_t startTime = get_absolute_time();
-    while (gpio_get(echoPin) == 1) 
-    {
-        width++;
-        sleep_us(1);
-        if (width > timeout) return 0;
+void echo_isr() {
+    if (gpio_get(ECHO_PIN)) { // Rising edge detected
+        start_time = time_us_32();
+    } else { // Falling edge detected
+        end_time = time_us_32();
+        new_measurement_available = true;
     }
-    absolute_time_t endTime = get_absolute_time();
+}
+
+void timer_callback() {
+    // Set TRIG pin low
+    gpio_put(TRIG_PIN, 0);
     
-    return absolute_time_diff_us(startTime, endTime);
+    // Disable the timer interrupt (single shot)
+    hw_clear_bits(&timer_hw->intr, 1u << 0);
 }
 
-uint64_t getCm(uint trigPin, uint echoPin)
-{
-    uint64_t pulseLength = getPulse(trigPin, echoPin);
-    return pulseLength / 29 / 2;
+void hcsr04_init() {
+    gpio_init(TRIG_PIN);
+    gpio_set_dir(TRIG_PIN, GPIO_OUT);
+    gpio_put(TRIG_PIN, 0);
+
+    gpio_init(ECHO_PIN);
+    gpio_set_dir(ECHO_PIN, GPIO_IN);
+
+    // Setup interrupt on ECHO pin for both rising and falling edges
+    gpio_set_irq_enabled_with_callback(ECHO_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &echo_isr);
 }
 
-uint64_t getInch(uint trigPin, uint echoPin)
-{
-    uint64_t pulseLength = getPulse(trigPin, echoPin);
-    return (long)pulseLength / 74.f / 2.f;
+void hcsr04_trigger_measurement() {
+    // Start the timer interrupt for 10 microseconds
+    uint alarm_num = 0;  // Using timer 0
+    hw_set_bits(&timer_hw->inte, 1u << alarm_num);
+    timer_hw->alarm[alarm_num] = timer_hw->timerawl + 10;  // Set for 10 microseconds from now
+    
+    irq_set_exclusive_handler(TIMER_IRQ_0, timer_callback);
+    irq_set_enabled(TIMER_IRQ_0, true);
+
+    // Set TRIG pin high
+    gpio_put(TRIG_PIN, 1);
+}
+
+
+float hcsr04_calculate_distance_cm() {
+    float time_elapsed = (float)(end_time - start_time);  // Time in microseconds
+    return (time_elapsed * 0.0343) / 2;  // Speed of sound is 343 m/s or 0.0343 cm/us
 }
 
 int main() {
     stdio_init_all();
-    
-    // Set up ultrasonic sensor pins
-    uint trigPin = 0;  // Replace with the appropriate GPIO pin number
-    uint echoPin = 1;  // Replace with the appropriate GPIO pin number
-    setupUltrasonicPins(trigPin, echoPin);
-    
-    while (true) {
-        // Get distance in centimeters
-        uint64_t distance_cm = getCm(trigPin, echoPin);
-        
-        // Print distance to the console
-        if (distance_cm > 0) {
-            printf("Distance: %llu cm\n", distance_cm);
-        } else {
-            printf("No object detected\n");
+    hcsr04_init();
+
+    uint32_t last_trigger_time = 0;
+
+    while (1) {
+        // Trigger a new measurement every 500 ms
+        if (time_us_32() - last_trigger_time > 500000) {
+            hcsr04_trigger_measurement();
+            last_trigger_time = time_us_32();
         }
-        
-        sleep_ms(1000);
+
+        // Check if a new measurement is available
+        if (new_measurement_available) {
+            float distance = hcsr04_calculate_distance_cm();
+            printf("Distance: %.2f cm\n", distance);
+            new_measurement_available = false;
+        }
     }
+
+    return 0;
 }
