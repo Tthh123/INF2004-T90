@@ -57,7 +57,6 @@ bool forwardMovement = 1;
 void
 echo_isr()
 {
-    printf("JJ Dog");
     if (gpio_get(ECHO_PIN))
     { // Rising edge detected
         start_time = time_us_32();
