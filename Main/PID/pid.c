@@ -44,7 +44,7 @@ double   totalDistLeft      = 0.0;
 float    currSpeedLeft      = 0.0;
 
 float Kp_right = 1.0, Ki_right = 0.01, Kd_right = 0.05;
-float Kp_left = 0.1, Ki_left = 0.01, Kd_left = 0.05;
+float Kp_left = 0.90, Ki_left = 0.01, Kd_left = 0.05;
 float error_right = 0, integral_right = 0, derivative_right = 0,
       last_error_right = 0;
 float error_left = 0, integral_left = 0, derivative_left = 0,
@@ -53,6 +53,72 @@ float target_speed_right = 20.0; // Set your target speeds here
 float target_speed_left  = 20.0;
 
 bool forwardMovement = 1;
+
+void
+echo_isr()
+{
+    printf("JJ Dog");
+    if (gpio_get(ECHO_PIN))
+    { // Rising edge detected
+        start_time = time_us_32();
+    }
+    else
+    { // Falling edge detected
+        end_time                  = time_us_32();
+        new_measurement_available = true;
+    }
+}
+
+void
+timer_callback()
+{
+    printf("Dooggy");
+    // Set TRIG pin low
+    gpio_put(TRIG_PIN, 0);
+
+    // Disable the timer interrupt (single shot)
+    hw_clear_bits(&timer_hw->intr, 1u << 0);
+}
+
+void
+hcsr04_init()
+{
+    gpio_init(TRIG_PIN);
+    gpio_set_dir(TRIG_PIN, GPIO_OUT);
+    gpio_put(TRIG_PIN, 0);
+
+    gpio_init(ECHO_PIN);
+    gpio_set_dir(ECHO_PIN, GPIO_IN);
+
+    // Setup interrupt on ECHO pin for both rising and falling edges
+    gpio_set_irq_enabled_with_callback(
+        ECHO_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &echo_isr);
+}
+
+void
+hcsr04_trigger_measurement()
+{
+    printf("Water break");
+    // Start the timer interrupt for 10 microseconds
+    uint alarm_num = 0; // Using timer 0
+    hw_set_bits(&timer_hw->inte, 1u << alarm_num);
+    timer_hw->alarm[alarm_num]
+        = timer_hw->timerawl + 10; // Set for 10 microseconds from now
+
+    irq_set_exclusive_handler(TIMER_IRQ_0, timer_callback);
+    irq_set_enabled(TIMER_IRQ_0, true);
+
+    // Set TRIG pin high
+    gpio_put(TRIG_PIN, 1);
+}
+
+float
+hcsr04_calculate_distance_cm()
+{
+    float time_elapsed = (float)(end_time - start_time); // Time in microseconds
+    return (time_elapsed * 0.0343)
+           / 2; // Speed of sound is 343 m/s or 0.0343 cm/us
+}
 
 float
 calculate_speed(uint32_t notch_period_ms)
@@ -145,7 +211,6 @@ handle_notch(uint gpio, uint32_t events)
     }
 }
 
-
 float
 pid_controller(float  current_speed,
                float  target_speed,
@@ -191,11 +256,11 @@ set_pulse_width(uint slice_num, uint8_t channel, float duty_cycle)
 {
     if (channel == PWM_CHAN_A)
     {
-        pwm_set_chan_level(slice_num, PWM_CHAN_A, 12500 * (duty_cycle / 100));
+        pwm_set_chan_level(slice_num, PWM_CHAN_A, 16075 * (duty_cycle / 100));
     }
     else if (channel == PWM_CHAN_B)
     {
-        pwm_set_chan_level(slice_num, PWM_CHAN_B, 12500 * (duty_cycle / 100));
+        pwm_set_chan_level(slice_num, PWM_CHAN_B, 16075 * (duty_cycle / 100));
     }
     else
     {
@@ -227,8 +292,8 @@ update_motors()
                                     Kp_left,
                                     Ki_left,
                                     Kd_left,
-                                    15,
-                                    30);
+                                    30,
+                                    45);
 
     // printf("Right: %f\n", pwm_right);
     // printf("Left: %f\n", pwm_left);
@@ -304,8 +369,8 @@ init_pins()
     gpio_set_dir(LEFT_FORWARD, GPIO_OUT);
     pwm_set_clkdiv(0, 100);
     pwm_set_wrap(0, 16075);
-    pwm_set_chan_level(0, PWM_CHAN_A, 6000);
-    pwm_set_chan_level(0, PWM_CHAN_B, 6500);
+    pwm_set_chan_level(0, PWM_CHAN_A, 6000); // pin 0 right
+    pwm_set_chan_level(0, PWM_CHAN_B, 6500); // pin 1 left
     pwm_set_enabled(0, true);
 }
 
@@ -318,17 +383,31 @@ main()
     printf("Start");
     init_pins();
 
-    // gpio_set_irq_enabled_with_callback(WHEEL_ENCODER_1,
-    //                                    GPIO_IRQ_EDGE_RISE |
-    //                                    GPIO_IRQ_EDGE_FALL, true,
-    //                                    &handle_notch);
-    // gpio_set_irq_enabled_with_callback(WHEEL_ENCODER_2,
-    //                                    GPIO_IRQ_EDGE_RISE |
-    //                                    GPIO_IRQ_EDGE_FALL, true,
-    //                                    &handle_notch);
+    gpio_set_irq_enabled_with_callback(WHEEL_ENCODER_1,
+                                       GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
+                                       true,
+                                       &handle_notch);
+    gpio_set_irq_enabled_with_callback(WHEEL_ENCODER_2,
+                                       GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
+                                       true,
+                                       &handle_notch);
 
     while (1)
     {
+        // Trigger a new measurement every 500 ms
+        if (time_us_32() - last_trigger_time > 500000)
+        {
+            hcsr04_trigger_measurement();
+            last_trigger_time = time_us_32();
+        }
+        // Check if a new measurement is available
+        if (new_measurement_available)
+        {
+            float distance = hcsr04_calculate_distance_cm();
+            printf("Distance: %.2f cm\n", distance);
+            new_measurement_available = false;
+        }
+
         moveForward();
         update_motors();
     }
