@@ -67,15 +67,26 @@ int main() {
 
     while (1) {
         // Trigger a new measurement every 500 ms
-        if (time_us_32() - last_trigger_time > 500000) {
+        if (time_us_32() - last_trigger_time > 500000)
+        {
             hcsr04_trigger_measurement();
             last_trigger_time = time_us_32();
         }
 
         // Check if a new measurement is available
-        if (new_measurement_available) {
+        if (new_measurement_available)
+        {
             float distance = hcsr04_calculate_distance_cm();
             printf("Distance: %.2f cm\n", distance);
+
+            if (distance < 5.0)
+            {
+                moveBackward();
+            }
+            else
+            {
+                moveForward();
+            }
             new_measurement_available = false;
         }
     }
