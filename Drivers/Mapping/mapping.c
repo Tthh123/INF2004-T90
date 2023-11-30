@@ -1,15 +1,15 @@
-// DFS algorithm in C
-
 #include <stdio.h>
 #include <stdlib.h>
 #define SIZE 40
 
+// Define a queue structure for BFS
 struct queue {
   int items[SIZE];
   int front;
   int rear;
 };
 
+// Function declarations related to the queue
 struct queue* createQueue();
 void enqueue(struct queue* q, int);
 int dequeue(struct queue* q);
@@ -17,49 +17,29 @@ void display(struct queue* q);
 int isEmpty(struct queue* q);
 void printQueue(struct queue* q);
 
+// Define a node structure for the adjacency list
 struct node {
   int vertex;
   struct node* next;
 };
 
+// Function to create a new node
 struct node* createNode(int v);
 
+// Define a Graph structure
 struct Graph {
   int numVertices;
   int* visited;
-
-  // We need int** to store a two dimensional array.
-  // Similary, we need struct node** to store an array of Linked lists
-  struct node** adjLists;
+  struct node** adjLists; // Pointer to an array of adjacency lists
 };
 
-// BFS algorithm
-void bfs(struct Graph* graph, int startVertex) {
-  struct queue* q = createQueue();
+// BFS algorithm declaration
+void bfs(struct Graph* graph, int startVertex);
 
-  graph->visited[startVertex] = 1;
-  enqueue(q, startVertex);
+// DFS algorithm declaration
+void DFS(struct Graph* graph, int vertex);
 
-  while (!isEmpty(q)) {
-    printQueue(q);
-    int currentVertex = dequeue(q);
-    printf("Visited %d\n", currentVertex);
-
-    struct node* temp = graph->adjLists[currentVertex];
-
-    while (temp) {
-      int adjVertex = temp->vertex;
-
-      if (graph->visited[adjVertex] == 0) {
-        graph->visited[adjVertex] = 1;
-        enqueue(q, adjVertex);
-      }
-      temp = temp->next;
-    }
-  }
-}
-
-// Creating a node
+// Function to create a new node
 struct node* createNode(int v) {
   struct node* newNode = malloc(sizeof(struct node));
   newNode->vertex = v;
@@ -67,16 +47,14 @@ struct node* createNode(int v) {
   return newNode;
 }
 
-// Creating a graph
+// Function to create a graph with a given number of vertices
 struct Graph* createGraph(int vertices) {
   struct Graph* graph = malloc(sizeof(struct Graph));
   graph->numVertices = vertices;
-
   graph->adjLists = malloc(vertices * sizeof(struct node*));
   graph->visited = malloc(vertices * sizeof(int));
 
-  int i;
-  for (i = 0; i < vertices; i++) {
+  for (int i = 0; i < vertices; i++) {
     graph->adjLists[i] = NULL;
     graph->visited[i] = 0;
   }
@@ -84,20 +62,20 @@ struct Graph* createGraph(int vertices) {
   return graph;
 }
 
-// Add edge
+// Function to add an edge to the graph
 void addEdge(struct Graph* graph, int src, int dest) {
   // Add edge from src to dest
   struct node* newNode = createNode(dest);
   newNode->next = graph->adjLists[src];
   graph->adjLists[src] = newNode;
 
-  // Add edge from dest to src
+  // Add edge from dest to src (for an undirected graph)
   newNode = createNode(src);
   newNode->next = graph->adjLists[dest];
   graph->adjLists[dest] = newNode;
 }
 
-// Create a queue
+// Function to create a new queue
 struct queue* createQueue() {
   struct queue* q = malloc(sizeof(struct queue));
   q->front = -1;
@@ -105,15 +83,12 @@ struct queue* createQueue() {
   return q;
 }
 
-// Check if the queue is empty
+// Function to check if the queue is empty
 int isEmpty(struct queue* q) {
-  if (q->rear == -1)
-    return 1;
-  else
-    return 0;
+  return q->rear == -1;
 }
 
-// Adding elements into queue
+// Function to add an element to the queue
 void enqueue(struct queue* q, int value) {
   if (q->rear == SIZE - 1)
     printf("\nQueue is Full!!");
@@ -125,7 +100,7 @@ void enqueue(struct queue* q, int value) {
   }
 }
 
-// Removing elements from queue
+// Function to remove an element from the queue
 int dequeue(struct queue* q) {
   int item;
   if (isEmpty(q)) {
@@ -135,87 +110,65 @@ int dequeue(struct queue* q) {
     item = q->items[q->front];
     q->front++;
     if (q->front > q->rear) {
-      printf("Resetting queue ");
       q->front = q->rear = -1;
     }
   }
   return item;
 }
 
-// Print the queue
+// Function to print the queue
 void printQueue(struct queue* q) {
-  int i = q->front;
-
   if (isEmpty(q)) {
     printf("Queue is empty");
   } else {
     printf("\nQueue contains \n");
-    for (i = q->front; i < q->rear + 1; i++) {
+    for (int i = q->front; i <= q->rear; i++) {
       printf("%d ", q->items[i]);
     }
   }
 }
 
-// DFS algo
+// BFS algorithm implementation
+void bfs(struct Graph* graph, int startVertex) {
+  struct queue* q = createQueue();
+  graph->visited[startVertex] = 1;
+  enqueue(q, startVertex);
+
+  while (!isEmpty(q)) {
+    printQueue(q);
+    int currentVertex = dequeue(q);
+    printf("Visited %d\n", currentVertex);
+
+    struct node* temp = graph->adjLists[currentVertex];
+    while (temp) {
+      int adjVertex = temp->vertex;
+      if (graph->visited[adjVertex] == 0) {
+        graph->visited[adjVertex] = 1;
+        enqueue(q, adjVertex);
+      }
+      temp = temp->next;
+    }
+  }
+}
+
+// DFS algorithm implementation
 void DFS(struct Graph* graph, int vertex) {
   struct node* adjList = graph->adjLists[vertex];
-  struct node* temp = adjList;
-
   graph->visited[vertex] = 1;
   printf("Visited %d \n", vertex);
 
-  while (temp != NULL) {
-    int connectedVertex = temp->vertex;
-
+  while (adjList != NULL) {
+    int connectedVertex = adjList->vertex;
     if (graph->visited[connectedVertex] == 0) {
       DFS(graph, connectedVertex);
     }
-    temp = temp->next;
+    adjList = adjList->next;
   }
 }
 
-// Create a node
-struct node* createNode(int v) {
-  struct node* newNode = malloc(sizeof(struct node));
-  newNode->vertex = v;
-  newNode->next = NULL;
-  return newNode;
-}
-
-// Create graph
-struct Graph* createGraph(int vertices) {
-  struct Graph* graph = malloc(sizeof(struct Graph));
-  graph->numVertices = vertices;
-
-  graph->adjLists = malloc(vertices * sizeof(struct node*));
-
-  graph->visited = malloc(vertices * sizeof(int));
-
-  int i;
-  for (i = 0; i < vertices; i++) {
-    graph->adjLists[i] = NULL;
-    graph->visited[i] = 0;
-  }
-  return graph;
-}
-
-// Add edge
-void addEdge(struct Graph* graph, int src, int dest) {
-  // Add edge from src to dest
-  struct node* newNode = createNode(dest);
-  newNode->next = graph->adjLists[src];
-  graph->adjLists[src] = newNode;
-
-  // Add edge from dest to src
-  newNode = createNode(src);
-  newNode->next = graph->adjLists[dest];
-  graph->adjLists[dest] = newNode;
-}
-
-// Print the graph
+// Function to print the adjacency list representation of the graph
 void printGraph(struct Graph* graph) {
-  int v;
-  for (v = 0; v < graph->numVertices; v++) {
+  for (int v = 0; v < graph->numVertices; v++) {
     struct node* temp = graph->adjLists[v];
     printf("\n Adjacency list of vertex %d\n ", v);
     while (temp) {
