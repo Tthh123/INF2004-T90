@@ -160,27 +160,28 @@ void init_motor_control()
     adc_gpio_init(ADC_Y_AXIS);
 }
 
-int main()
-{
+int main() {
     stdio_init_all();
 
-    uint32_t last_trigger_time = 0;
-    bool anotherBlack=0;
+    uint32_t last_trigger_time = 0; // Timestamp of the last movement change
+    bool anotherBlack = 0; // Flag to indicate if another black line is detected
 
-    while (1)
-    {
-        move_forward_both();
-        // Read ADC value from GPIO 26 and GPIO 27
-        adc_select_input(0); // Select ADC channel for GPIO 26
+    while (1) {
+        move_forward_both(); // Continuously move forward
+
+        // Read ADC values from X and Y axis IR sensors
+        uint16_t sensor_value_26, sensor_value_27;
+        adc_select_input(0);
         sensor_value_26 = adc_read();
-        adc_select_input(1); // Select ADC channel for GPIO 27
+        adc_select_input(1);
         sensor_value_27 = adc_read();
 
-        if (sensor_value_26 > IR_THRESHOLD)
-        {
+        // Detect line on the left side and initiate corrective action
+        if (sensor_value_26 > IR_THRESHOLD) {
             lastIRLeft = to_ms_since_boot(get_absolute_time());
-            if (sensor_value_27 > IR_THRESHOLD && (to_ms_since_boot(get_absolute_time()) -lastIRLeft) < detection_threshold){
-                move_ninety_left();
+            if (sensor_value_27 > IR_THRESHOLD && (to_ms_since_boot(get_absolute_time()) - lastIRLeft) < detection_threshold) {
+                move_ninety_left(); // Rotate 90 degrees left
+                // Check for line detection during rotation
                 uint32_t turningTime = to_ms_since_boot(get_absolute_time());
                 bool lineDetected = false;
 
@@ -190,38 +191,37 @@ int main()
                         break;
                     }
                 }
-                if (lineDetected){
-                    move_ninety_right();
+                if (lineDetected) {
+                    move_ninety_right(); // Correct the rotation if a line is detected
                     sleep_ms(650);
                 }
-
             }
-            lastIRLeft=0;
-            anotherBlack=0;
+            lastIRLeft = 0;
+            anotherBlack = 0;
         }
 
-        if (sensor_value_27 > IR_THRESHOLD)
-        {
+        // Detect line on the right side and initiate corrective action
+        if (sensor_value_27 > IR_THRESHOLD) {
             lastIRRight = to_ms_since_boot(get_absolute_time());
-            if (sensor_value_26 > IR_THRESHOLD && (to_ms_since_boot(get_absolute_time()) -lastIRRight) < detection_threshold){
-                move_ninety_right();
+            if (sensor_value_26 > IR_THRESHOLD && (to_ms_since_boot(get_absolute_time()) - lastIRRight) < detection_threshold) {
+                move_ninety_right(); // Rotate 90 degrees right
+                // Check for line detection during rotation
                 uint32_t turningTime = to_ms_since_boot(get_absolute_time());
                 bool lineDetected = false;
 
                 while (to_ms_since_boot(get_absolute_time()) - turningTime < 325) {
-                    if (sensor_value_26 > IR_THRESHOLD()) {
+                    if (sensor_value_26 > IR_THRESHOLD) {
                         lineDetected = true;
                         break;
                     }
                 }
-                if (lineDetected){
-                    move_ninety_left();
+                if (lineDetected) {
+                    move_ninety_left(); // Correct the rotation if a line is detected
                     sleep_ms(650);
                 }
-
             }
-            lastIRLeft=0;
-            anotherBlack=0;
+            lastIRRight = 0;
+            anotherBlack = 0;
         }
     }
 

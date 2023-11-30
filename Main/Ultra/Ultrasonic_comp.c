@@ -141,6 +141,7 @@ void timer_callback() {
 }
 
 void hcsr04_init() {
+	// Setup GPIO and interrupts for the ultrasonic sensor.
     gpio_init(TRIG_PIN);
     gpio_set_dir(TRIG_PIN, GPIO_OUT);
     gpio_put(TRIG_PIN, 0);
@@ -172,6 +173,8 @@ float hcsr04_calculate_distance_cm() {
 }
 
 int main() {
+	// If an object is detected within 5 cm, move backward; otherwise, move forward.
+}
     stdio_init_all();
     hcsr04_init();
 
