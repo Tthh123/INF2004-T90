@@ -211,34 +211,6 @@ struct Code39Character
     const char *binary;
 };
 
-// Function to find the Code 39 character from a binary string
-char findCode39Character(const char *barcodeString, const struct Code39Character *characters, int numCharacters)
-{
-    absolute_time_t current_time = get_absolute_time();
-    elapsed_seconds = absolute_time_diff_us(current_time, timeDiff) / 1000;
-    for (int i = 0; i < numCharacters; i++)
-    {
-        if (strcmp(barcodeString, characters[i].binary) == 0)
-        {
-            return characters[i].character;
-        }
-    }
-    if (counter > 60 && counter < 120)
-    {
-        return 'W';
-    }
-    if (counter > 120 && counter < 150)
-    {
-        return 'Y';
-    }
-    if (counter > 150)
-    {
-        return 'I';
-    }
-
-    return '?'; // Character not found
-}
-
 // Function to initialize the dynamic array
 void initializeDynamicArray(int **array, int *size, int *capacity)
 {
@@ -638,9 +610,6 @@ void initWifi(__unused void *params)
         // Concatenate the dynamic array into a string
         char *barcodeString = concatenateArrayToString(array, size);
         printf("Barcode String: %s\n", barcodeString);
-
-        character = findCode39Character(barcodeString, characters, numCharacters);
-        printf("Code 39 Character: %c\n", character);
 
         // Add a delay to avoid rapid readings (adjust as needed)
         if (size >= 40 || elapsed_seconds > 5000)
